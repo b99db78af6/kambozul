@@ -1,6 +1,8 @@
 from googleapiclient.discovery import build
 import pandas as pd
 from datetime import datetime
+import csv
+import isodate  # To parse the ISO 8601 duration
 
 # Replace 'YOUR_API_KEY' with your actual API key
 api_key = 'AIzaSyAvVhB5SOn5ufkksrSk6QT7olXYb2ZCmJU'
@@ -45,16 +47,21 @@ def get_video_details(video_ids):
     video_details = []
     for i in range(0, len(video_ids), 50):
         request = youtube.videos().list(
-            part='snippet,statistics',
+            part='snippet,statistics,contentDetails',
             id=','.join(video_ids[i:i+50])
         )
         response = request.execute()
         for item in response['items']:
+            duration = isodate.parse_duration(item['contentDetails']['duration']).total_seconds()
             video_details.append({
                 'title': item['snippet']['title'],
                 'videoId': item['id'],
-                'views': item['statistics']['viewCount'],
-                'publishedAt': item['snippet']['publishedAt']
+                'views': int(item['statistics'].get('viewCount', 0)),
+                'likes': int(item['statistics'].get('likeCount', 0)),
+                'dislikes': int(item['statistics'].get('dislikeCount', 0)),  # This may return 0 or be omitted
+                'comments': int(item['statistics'].get('commentCount', 0)),
+                'publishedAt': item['snippet']['publishedAt'],
+                'duration': int(duration)
             })
     return video_details
 
@@ -79,6 +86,19 @@ df['data_refresh_date'] = datetime.now()
 
 # Add a column with the channel ID
 df['channel_id'] = channel_id
+
+# Calculate metrics like/view	like/dur	coments/views	comments/dur	comments/likes
+df['likes_views'] = df['likes'] / df['views']
+df['likes_duration'] = df['likes'] / df['duration']
+df['comments_views'] = df['comments'] / df['views']
+df['comments_duration'] = df['comments'] / df['duration']
+df['comments_likes'] = df['comments'] / df['likes']
+
+# Sort the DataFrame by published date in descending order
+df = df.sort_values(by='publishedAt', ascending=False)
+
+# Reorder columns to move 'channel_id' and 'data_refresh_date' to the front
+df = df[['channel_id', 'data_refresh_date', 'title', 'videoId', 'publishedAt', 'views', 'likes', 'dislikes', 'comments', 'duration', 'likes_views', 'likes_duration', 'comments_views', 'comments_duration', 'comments_likes']]
 
 # Print the DataFrame
 print(df)
