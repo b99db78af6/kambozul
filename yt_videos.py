@@ -1,14 +1,19 @@
 from googleapiclient.discovery import build
 import pandas as pd
 from datetime import datetime
+from dateutil import parser
 import csv
 import isodate  # To parse the ISO 8601 duration
+import sqlite3
 
 # Replace 'YOUR_API_KEY' with your actual API key
 api_key = 'AIzaSyAvVhB5SOn5ufkksrSk6QT7olXYb2ZCmJU'
 channel_id = 'UCyFrUC936RTrwRjE0tEbZCQ'
 
 youtube = build('youtube', 'v3', developerKey=api_key)
+
+# Get current date / time
+teraz = datetime.now()
 
 # Get the uploads playlist ID
 def get_uploads_playlist_id(channel_id):
@@ -60,7 +65,7 @@ def get_video_details(video_ids):
                 'likes': int(item['statistics'].get('likeCount', 0)),
                 'dislikes': int(item['statistics'].get('dislikeCount', 0)),  # This may return 0 or be omitted
                 'comments': int(item['statistics'].get('commentCount', 0)),
-                'publishedAt': item['snippet']['publishedAt'],
+                'publishedAt': parser.isoparse(item['snippet']['publishedAt']),
                 'duration': int(duration)
             })
     return video_details
@@ -72,6 +77,16 @@ def list_videos_with_views_and_dates(channel_id):
     video_details = get_video_details(video_ids)
     return video_details
 
+# Get the number of channel subscriptions
+def get_channel_subscriptions(channel_id):
+    request = youtube.channels().list(
+        part='statistics',
+        id=channel_id
+    )
+    response = request.execute()
+    subscriber_count = int(response['items'][0]['statistics']['subscriberCount'])
+    return subscriber_count
+
 # Get video details for the specified channel
 videos = list_videos_with_views_and_dates(channel_id)
 
@@ -82,10 +97,16 @@ df = pd.DataFrame(videos)
 df['publishedAt'] = pd.to_datetime(df['publishedAt'])
 
 # Add a column with the current timestamp as data refresh date
-df['data_refresh_date'] = datetime.now()
+df['data_refresh_date'] = teraz
 
 # Add a column with the channel ID
 df['channel_id'] = channel_id
+
+# Get the number of channel subscriptions
+subscriber_count = get_channel_subscriptions(channel_id)
+
+# Add a column with the number of channel subscriptions
+df['subscriber_count'] = subscriber_count
 
 # Calculate metrics like/view	like/dur	coments/views	comments/dur	comments/likes
 df['likes_views'] = df['likes'] / df['views']
@@ -94,14 +115,68 @@ df['comments_views'] = df['comments'] / df['views']
 df['comments_duration'] = df['comments'] / df['duration']
 df['comments_likes'] = df['comments'] / df['likes']
 
+# my own metrics
+df['avg_score'] = (df['likes_views'] + df['likes_duration'] +df['comments_views'] + df['comments_duration'] + df['comments_likes']) / 5
+df['score_x_dur'] = df['avg_score'] * df['duration']
+
 # Sort the DataFrame by published date in descending order
 df = df.sort_values(by='publishedAt', ascending=False)
 
+# Convert the 'publishedAt' column to datetime and make it timezone-naive
+df['publishedAt'] = pd.to_datetime(df['publishedAt']).dt.tz_convert(None)
+
+# Calculate the time difference (in minutes) between data_refresh_date and publishedAt
+df['age_in_minutes'] = (df['data_refresh_date'] - df['publishedAt']).dt.total_seconds() / 60
+
+
+# Calculate individual measures
+df['LVR'] = df['likes'] / df['views']
+df['CVR'] = df['comments'] / df['views']
+df['LCR'] = df['likes'] / df['comments']
+df['ER'] = (df['likes'] + df['comments']) / df['views']
+df['DNE'] = (df['likes'] + df['comments']) / df['duration']
+
+# New measures incorporating subscribers and age of video
+df['Views_per_Subscriber'] = df['views'] / df['subscriber_count']
+df['Likes_per_Subscriber'] = df['likes'] / df['subscriber_count']
+df['Comments_per_Subscriber'] = df['comments'] / df['subscriber_count']
+df['ER_normalized'] = df['ER'] / df['age_in_minutes']
+
+# Define weights for each measure including the new ones
+weights = {
+    'ER': 0.3,
+    'LVR': 0.15,
+    'CVR': 0.15,
+    'LCR': 0.1,
+    'DNE': 0.1,
+    'Views_per_Subscriber': 0.1,
+    'ER_normalized': 0.1
+}
+
+# Calculate Engagement Score with new measures
+df['Engagement_Score'] = (
+    df['ER'] * weights['ER'] +
+    df['LVR'] * weights['LVR'] +
+    df['CVR'] * weights['CVR'] +
+    df['LCR'] * weights['LCR'] +
+    df['DNE'] * weights['DNE'] +
+    df['Views_per_Subscriber'] * weights['Views_per_Subscriber'] +
+    df['ER_normalized'] * weights['ER_normalized']
+)
+
 # Reorder columns to move 'channel_id' and 'data_refresh_date' to the front
-df = df[['channel_id', 'data_refresh_date', 'title', 'videoId', 'publishedAt', 'views', 'likes', 'dislikes', 'comments', 'duration', 'likes_views', 'likes_duration', 'comments_views', 'comments_duration', 'comments_likes']]
+df = df[['channel_id', 'subscriber_count', 'data_refresh_date', 'title', 'videoId', 'publishedAt', 'views', 'likes', 'dislikes', 'comments', 'duration', 'likes_views', 'likes_duration', 'comments_views', 'comments_duration', 'comments_likes', 'age_in_minutes', 'avg_score', 'score_x_dur', 'Engagement_Score', 'Views_per_Subscriber', 'Likes_per_Subscriber', 'Comments_per_Subscriber', 'DNE', 'ER', 'ER_normalized']]
 
 # Print the DataFrame
 print(df)
 
+# Format the date and time as a string in the desired format
+teraz = teraz.strftime("%Y%m%d%H%M")
+
 # Optionally, save the DataFrame to a CSV file
-df.to_csv('youtube_videos.csv', index=False, quoting=csv.QUOTE_NONNUMERIC)
+df.to_csv(f'{teraz}_youtube_videos.csv', index=False, quoting=csv.QUOTE_NONNUMERIC)
+
+# Save the DataFrame to a SQLite database
+conn = sqlite3.connect('youtube_videos.db')
+df.to_sql('videos', conn, if_exists='replace', index=False)
+conn.close()
