@@ -178,5 +178,6 @@ df.to_csv(f'{teraz}_youtube_videos.csv', index=False, quoting=csv.QUOTE_NONNUMER
 
 # Save the DataFrame to a SQLite database
 conn = sqlite3.connect('youtube_videos.db')
-df.to_sql('videos', conn, if_exists='replace', index=False)
+# df.to_sql('videos', conn, if_exists='replace', index=False)
+df.to_sql('videos', conn, if_exists='append', index=False)
 conn.close()
