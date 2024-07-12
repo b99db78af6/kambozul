@@ -5,15 +5,27 @@ from dateutil import parser
 import csv
 import isodate  # To parse the ISO 8601 duration
 import sqlite3
-
-# Replace 'YOUR_API_KEY' with your actual API key
-api_key = 'AIzaSyAvVhB5SOn5ufkksrSk6QT7olXYb2ZCmJU'
-channel_id = 'UCyFrUC936RTrwRjE0tEbZCQ'
-
-youtube = build('youtube', 'v3', developerKey=api_key)
+import logging
+import sys
 
 # Get current date / time
 teraz = datetime.now()
+
+# Logging config
+logging.basicConfig(filename=f'logs/{teraz}_youtube_videos.log', filemode='w', format='%(asctime)s - %(message)s', level=logging.INFO)
+
+# Replace 'YOUR_API_KEY' with your actual API key
+api_key = 'AIzaSyAvVhB5SOn5ufkksrSk6QT7olXYb2ZCmJU'
+#channel_id = 'UCyFrUC936RTrwRjE0tEbZCQ' # gapa
+#channel_id = 'UC1v8Pb3mVVhctpado1zkY-Q' # raport z akacji
+#channel_id = 'UCVwO3pAsl8u88yeHX9zPGqA' # cebe czeczen
+
+channel_id = sys.argv[1]
+print(channel_id)
+
+logging.info(f'Processing channel: {channel_id}')
+
+youtube = build('youtube', 'v3', developerKey=api_key)
 
 # Get the uploads playlist ID
 def get_uploads_playlist_id(channel_id):
