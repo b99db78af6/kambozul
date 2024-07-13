@@ -1,5 +1,6 @@
 #/bin/bash
 
+source venv/bin/activate
 # Gapa
 python3 yt_videos.py UCyFrUC936RTrwRjE0tEbZCQ
 
