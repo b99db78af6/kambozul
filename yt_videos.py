@@ -7,12 +7,21 @@ import isodate  # To parse the ISO 8601 duration
 import sqlite3
 import logging
 import sys
+from sqlalchemy import create_engine
+import db_config
 
 # Get current date / time
 teraz = datetime.now()
 
 # Logging config
 logging.basicConfig(filename=f'logs/{teraz}_youtube_videos.log', filemode='w', format='%(asctime)s - %(message)s', level=logging.INFO)
+
+# db parameters
+user = db_config.user
+pwd = db_config.pwd
+db_host = db_config.db_host
+db_port = db_config.db_port
+db_name = db_config.db_name
 
 # Replace 'YOUR_API_KEY' with your actual API key
 api_key = 'AIzaSyAvVhB5SOn5ufkksrSk6QT7olXYb2ZCmJU'
@@ -186,10 +195,15 @@ print(df)
 teraz = teraz.strftime("%Y%m%d%H%M")
 
 # Optionally, save the DataFrame to a CSV file
-df.to_csv(f'{teraz}_youtube_videos.csv', index=False, quoting=csv.QUOTE_NONNUMERIC)
+#df.to_csv(f'{teraz}_youtube_videos.csv', index=False, quoting=csv.QUOTE_NONNUMERIC)
 
 # Save the DataFrame to a SQLite database
-conn = sqlite3.connect('youtube_videos.db')
-# df.to_sql('videos', conn, if_exists='replace', index=False)
-df.to_sql('videos', conn, if_exists='append', index=False)
-conn.close()
+# conn = sqlite3.connect('youtube_videos.db')
+# # df.to_sql('videos', conn, if_exists='replace', index=False)
+# df.to_sql('videos', conn, if_exists='append', index=False)
+# conn.close()
+
+
+# alternatively save stuff into PostgresDB
+engine = create_engine(f'postgresql://{user}:{pwd}@{db_host}:{db_port}/{db_name}')
+df.to_sql('load_yt_videos', engine, if_exists='append', index=False)
