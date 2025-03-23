@@ -40,7 +40,8 @@ kanaly = []
 # kanaly.append('MotoBieda')
 # kanaly.append('coobcio')
 #kanaly.append('barturban')
-kanaly.append('woczykijwAzji')
+# kanaly.append('woczykijwAzji')
+kanaly.append('PatrykPiatekVlog')
 print(kanaly)
 
 
